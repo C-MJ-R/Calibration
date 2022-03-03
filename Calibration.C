@@ -32,7 +32,7 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0,
     printf("Analysing ch_roi\n");
     //plotting ch_roi
     TCanvas *c1;
-    TFile *f = new TFile("outputP1PElilSec.root", "read");
+    TFile *f = new TFile("outputP1PESec.root", "read");
     TTree *data = (TTree*)f->Get("dstree");
 
         c1 = new TCanvas("c1", "Finger Plot",200,10,600,400);
