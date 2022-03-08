@@ -29,14 +29,23 @@
 
 void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0, double nmax2 =6)
 {   
-    printf("Analysing ch_roi\n");
     //plotting ch_roi
-    TCanvas *c1;
-    TFile *f = new TFile("outputP1PESec.root", "read");
-    TTree *data = (TTree*)f->Get("dstree");
-
-        c1 = new TCanvas("c1", "Finger Plot",200,10,600,400);
-        TH1 *h1 = new TH1F("h1","ch_roi",nbin,nmin,nmax);
+    int numrun = 5;
+    int run[numrun];
+    vector<float> histentry;
+    for (int lk = 1; lk < numrun+1;lk++)
+    {
+        run[lk] = (3*lk);
+    }
+    TCanvas *c1[numrun];
+    for (int l = 1; l < numrun+1; l++)
+    {
+        printf("Analysing ch_roi at AP and CT probabilities in the order of e-%d\n", run[l]);
+        TFile *f = new TFile(Form("APCTe_%i.root",run[l]), "read");
+        TTree *data = (TTree*)f->Get("dstree");
+    
+        c1[l] = new TCanvas(Form("c%d",run[l]), "Finger Plot",200,10,600,400);
+        TH1 *h1 = new TH1F("h1",Form("ch_roi_e-%d",run[l]), nbin, nmin, nmax);
         data->Draw("ch_roi>>h1");
         double FirstBin = h1->FindFirstBinAbove(0,1,1,-1);
         double LastBin = h1->FindLastBinAbove(0,1,1,-1);
@@ -45,84 +54,87 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0,
         h1->GetXaxis()->SetRangeUser(nmin,nmax);
         h1->Draw();
 
-    //Peak finding ch_roi
-    TSpectrum *s1 = new TSpectrum(10);
-    int nfound1 = s1->Search(h1,4,"",0.005);
-    printf("Found %d candidate peaks to fit\n", nfound1);
-    double *x1 = s1->GetPositionX();
-    vector<double> x(x1, x1 + nfound1);
-    sort(x.begin(), x.end());
-    
-    //mean distance ch_roi
-    float dmu = 0;
-    for (int i = 0; i < nfound1-1; i++)
-    {
-        dmu += x[i + 1] - x[i];
-    }
-    dmu = dmu/(nfound1-1);
-    
-    //Fitting single guas on ch_roi
+        histentry.push_back(h1->GetEntries());
+        printf("%g\n",histentry[l-1]);
 
-    TF1 *g[nfound1];
-    for (int p=0;p<nfound1;p++) 
-    {
-        g[p] = new TF1("gaus","gaus",x[p] -dmu/2, x[p] + dmu/2);
+        //Peak finding ch_roi
+        TSpectrum *s1 = new TSpectrum(10);
+        int nfound1 = s1->Search(h1,4,"",0.005);
+        printf("Found %d candidate peaks to fit\n", nfound1);
+        double *x1 = s1->GetPositionX();
+        vector<double> x(x1, x1 + nfound1);
+        sort(x.begin(), x.end());
+    
+        //mean distance ch_roi
+        float dmu = 0;
+        for (int i = 0; i < nfound1-1; i++)
+        {
+           dmu += x[i + 1] - x[i];
+        }
+        dmu = dmu/(nfound1-1);
+    
+        //Fitting single guas on ch_roi
+
+        TF1 *g[nfound1];
+        for (int p=0;p<nfound1;p++) 
+        {
+            g[p] = new TF1("gaus","gaus",x[p] -dmu/2, x[p] + dmu/2);
 	
-        g[p]->SetLineWidth(2);
-        g[p]->SetLineColor(kRed);
-        h1->Fit(g[p],"R+Q+0");
-    }
-    //Fitting sum of guas on ch_roi
-    string sgaus = "gaus(0) ";
-      for (int s = 1; s < nfound1; s++)
-      {
-            sgaus += Form("+ gaus(%d) ", 3*s);
-      } 
+            g[p]->SetLineWidth(2);
+            g[p]->SetLineColor(kRed);
+            h1->Fit(g[p],"R+Q+0");
+        }
+        //Fitting sum of guas on ch_roi
+        string sgaus = "gaus(0) ";
+        for (int s = 1; s < nfound1; s++)
+        {
+                sgaus += Form("+ gaus(%d) ", 3*s);
+        } 
       
-      TF1 *sum = new TF1("gaussum",sgaus.c_str(),x[0] - dmu/2, x[nfound1 - 1] + dmu/2);
-      sum->SetNpx(1000);
+        TF1 *sum = new TF1("gaussum",sgaus.c_str(),x[0] - dmu/2, x[nfound1 - 1] + dmu/2);
+        sum->SetNpx(1000);
 
-      for (int k=0;k<3*nfound1;k++)
-      {
+        for (int k=0;k<3*nfound1;k++)
+        {
 	        sum->SetParameter(k,g[(k-k%3)/3]->GetParameter(k%3));
 	        if(!(k-1)%3) sum->FixParameter(k,g[(k-k%3)/3]->GetParameter(k%3));
             //look in the range +/- dmu/3
 	        if(!(k-1)%3) sum->SetParLimits(k, sum->GetParameter(k) - dmu/3,sum->GetParameter(k) + dmu/3);    
-      }
-      h1->Fit(sum,"R+Q+0");
+        }
+        h1->Fit(sum,"R+Q+0");
 
-        // this refines the fit, fixes the other paramters and refines the x
-       for (int k=0;k<3*nfound1;k++)
-      {
+            // this refines the fit, fixes the other paramters and refines the x
+            for (int k=0;k<3*nfound1;k++)
+        {
 	        sum->SetParameter(k,g[(k-k%3)/3]->GetParameter(k%3));
 	        if(!(k-1)%3) sum->ReleaseParameter(k);
             //look in the range =/- dmu/3
             if(!(k-1)%3) sum->SetParLimits(k, sum->GetParameter(k) - dmu/3,sum->GetParameter(k) + dmu/3);
-      }
+        }
       
-       sum->SetLineWidth(2);
-       sum->SetLineColor(kBlack);
-       h1->Fit(sum,"R+Q");
+        sum->SetLineWidth(2);
+        sum->SetLineColor(kBlack);
+        h1->Fit(sum,"R+Q");
 
-       //extracting fit parameters and finding average distance
-       vector<double>peakmean;
-       for (int w = 0; w< nfound1; w++)
-       {
-           peakmean.push_back(sum->GetParameter((3*w)+1));
-       }
-       sort(peakmean.begin(), peakmean.end());
-       float dmuf = 0;
-       for (int ww = 0; ww <nfound1 -1; ww++)
-       {
-           dmuf += peakmean[ww + 1] - peakmean[ww];
-       }
-       /////////////////////////////////////////////////
-       //finding the average charge/PE
-       double CpPE[nfound1];
-       for (int i = 1; i < nfound1; i++)
+        //extracting fit parameters and finding average distance
+        vector<double>peakmean;
+        for (int w = 0; w< nfound1; w++)
+        {
+            peakmean.push_back(sum->GetParameter((3*w)+1));
+        }
+        sort(peakmean.begin(), peakmean.end());
+        float dmuf = 0;
+        for (int ww = 0; ww <nfound1 -1; ww++)
+        {
+            dmuf += peakmean[ww + 1] - peakmean[ww];
+        }
+        /////////////////////////////////////////////////
+        //finding the average charge/PE
+        double CpPE[nfound1];
+        for (int i = 1; i < nfound1; i++)
         {   
             CpPE[i] = x[i]/(i);
-            printf("%f\n",CpPE[i]);
+            //printf("%f\n",CpPE[i]);
 
         }
         //CpPE = (CpPE/(nfound1-1))*1e-13;
@@ -131,14 +143,13 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0,
        dmuf = (dmuf/(nfound1-1))*1e-13;
        printf("ch_roi 1PE corresponds to %g C\n", dmuf);
 
-    //Finding NPE for ch_roi
-    float TCharge = (h1->Integral(FirstBin,LastBin))*1e-13;
-    double NPEchroi = TCharge/dmuf;
-    printf("NPE for ch_roi is: %g\n", NPEchroi);
+        //Finding NPE for ch_roi
+        float TCharge = (h1->Integral(FirstBin,LastBin))*1e-13;
+        double NPEchroi = TCharge/dmuf;
+        printf("NPE for ch_roi is: %g\n", NPEchroi);
+    }
 
 }
-
-    
 //     printf("Analysing pk_p\n");
 //     //plotting pk_p
 //     TCanvas *c2;
