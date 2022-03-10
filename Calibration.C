@@ -32,7 +32,7 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0,
     printf("Analysing ch_roi\n");
     //plotting ch_roi
     TCanvas *c1;
-    TFile *f = new TFile("outputP1PESec.root", "read");
+    TFile *f = new TFile("outputTEST.root", "read");
     TTree *data = (TTree*)f->Get("dstree");
 
         c1 = new TCanvas("c1", "Finger Plot",200,10,600,400);
@@ -127,6 +127,8 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0,
         }
         //CpPE = (CpPE/(nfound1-1))*1e-13;
        // printf("%g\n",CpPE);
+
+       
 
        dmuf = (dmuf/(nfound1-1))*1e-13;
        printf("ch_roi 1PE corresponds to %g C\n", dmuf);
