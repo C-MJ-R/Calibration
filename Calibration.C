@@ -27,7 +27,7 @@
 #include "TVirtualFitter.h"
 
 
-void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0, double nmax2 =6)
+void Calibration(int nbin=300, int nmin= -2000, int nmax=20000, double nmin2 = 0, double nmax2 =6)
 {   
     //plotting ch_roi
     int numrun = 5;
@@ -35,27 +35,25 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0,
     vector<float> histentry;
     for (int lk = 1; lk < numrun+1;lk++)
     {
-        run[lk] = (3*lk);
+        run[lk] = lk;
     }
     TCanvas *c1[numrun];
+    TCanvas *c2[numrun];
     for (int l = 1; l < numrun+1; l++)
     {
-        printf("Analysing ch_roi at AP and CT probabilities in the order of e-%d\n", run[l]);
-        TFile *f = new TFile(Form("APCTe_%i.root",run[l]), "read");
+        printf("Analysing ch_roi with NPE%d\n", run[l]);
+        TFile *f = new TFile(Form("outputNPE%i.root",run[l]), "read");
         TTree *data = (TTree*)f->Get("dstree");
     
-        c1[l] = new TCanvas(Form("c%d",run[l]), "Finger Plot",200,10,600,400);
-        TH1 *h1 = new TH1F("h1",Form("ch_roi_e-%d",run[l]), nbin, nmin, nmax);
+        c1[l] = new TCanvas(Form("c1%d",run[l]), "Finger Plot",200,10,600,400);
+        TH1 *h1 = new TH1F("h1",Form("ch_roi_NPE%d",run[l]), nbin, nmin, nmax);
         data->Draw("ch_roi>>h1");
         double FirstBin = h1->FindFirstBinAbove(0,1,1,-1);
         double LastBin = h1->FindLastBinAbove(0,1,1,-1);
-        nmin = h1->GetXaxis()->GetBinCenter(FirstBin);
-        nmax = h1->GetXaxis()->GetBinCenter(LastBin);
-        h1->GetXaxis()->SetRangeUser(nmin,nmax);
+        //nmin = h1->GetXaxis()->GetBinCenter(FirstBin);
+        //nmax = h1->GetXaxis()->GetBinCenter(LastBin);
+        //h1->GetXaxis()->SetRangeUser(nmin,nmax);
         h1->Draw();
-
-        histentry.push_back(h1->GetEntries());
-        printf("%g\n",histentry[l-1]);
 
         //Peak finding ch_roi
         TSpectrum *s1 = new TSpectrum(10);
@@ -134,17 +132,36 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0,
         for (int i = 1; i < nfound1; i++)
         {   
             CpPE[i] = x[i]/(i);
-            //printf("%f\n",CpPE[i]);
-
+            printf("%f\n",CpPE[i]);
         }
+        // delete 3 (index 2)
+        for (int k = 0; k < sizeof(CpPE)/sizeof(CpPE[0]); k++)
+        {
+            CpPE[k] = CpPE[k + 1]; // copy next element left
+        }
+        
+        c2[l] = new TCanvas(Form("c2%d",run[l]), "Calibration Curve",200,10,600,400);
+        Int_t p = nfound1;
+        Double_t xc[p], y[p];
+        for (Int_t i=0; i<p; i++) 
+        {
+            xc[i] = 1.0*(i+1);
+            y[i] = 1.0*CpPE[i];
+        }
+        TGraph *gr = new TGraph(p,xc,y);
+        gr->SetTitle(Form("Calibration Curve for %dNPE w/no secondary events",run[l]));
+        gr->GetXaxis()->SetTitle("Number of Photoelectrons");
+        gr->GetYaxis()->SetTitle("Charge/Photoelectron");
+        gr->Draw("A*");
+        
         //CpPE = (CpPE/(nfound1-1))*1e-13;
-       // printf("%g\n",CpPE);
+        // printf("%g\n",CpPE);
 
        dmuf = (dmuf/(nfound1-1))*1e-13;
        printf("ch_roi 1PE corresponds to %g C\n", dmuf);
 
         //Finding NPE for ch_roi
-        float TCharge = (h1->Integral(FirstBin,LastBin))*1e-13;
+        float TCharge = (h1->Integral((peakmean[0]+dmuf/2),LastBin))*1e-13;
         double NPEchroi = TCharge/dmuf;
         printf("NPE for ch_roi is: %g\n", NPEchroi);
     }
