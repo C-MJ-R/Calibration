@@ -27,12 +27,12 @@
 #include "TVirtualFitter.h"
 
 
-void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0, double nmax2 =6)
+void Calibration(int nbin=300, int nmin= -2000, int nmax=20000, double nmin2 = 0, double nmax2 =6)
 {   
     printf("Analysing ch_roi\n");
     //plotting ch_roi
     TCanvas *c1;
-    TFile *f = new TFile("outputTEST.root", "read");
+    TFile *f = new TFile("outputNPE1_AP15_CT2.root", "read");
     TTree *data = (TTree*)f->Get("dstree");
 
         c1 = new TCanvas("c1", "Finger Plot",200,10,600,400);
@@ -127,6 +127,25 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0,
         }
         //CpPE = (CpPE/(nfound1-1))*1e-13;
        // printf("%g\n",CpPE);
+        // delete 3 (index 2)
+        for (int k = 0; k < sizeof(CpPE)/sizeof(CpPE[0]); k++)
+        {
+            CpPE[k] = CpPE[k + 1]; // copy next element left
+        }
+        TCanvas *c2;
+        c2 = new TCanvas("c2", "Calibration Curve",200,10,600,400);
+        Int_t p = nfound1;
+        Double_t xc[p], y[p];
+        for (Int_t i=0; i<p; i++) 
+        {
+            xc[i] = 1.0*(i+1);
+            y[i] = 1.0*CpPE[i];
+        }
+        TGraph *gr = new TGraph(p,xc,y);
+        gr->SetTitle("Calibration Curve for 1NPE w/ secondary events AP = 0.15, DiCT = 0.2");
+        gr->GetXaxis()->SetTitle("Number of Photoelectrons");
+        gr->GetYaxis()->SetTitle("Charge/Photoelectron");
+        gr->Draw("A*");
 
        
 
@@ -134,7 +153,7 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=8000, double nmin2 = 0,
        printf("ch_roi 1PE corresponds to %g C\n", dmuf);
 
     //Finding NPE for ch_roi
-    float TCharge = (h1->Integral(FirstBin,LastBin))*1e-13;
+    float TCharge = (h1->Integral((peakmean[0]+dmuf/2),LastBin))*1e-13;
     double NPEchroi = TCharge/dmuf;
     printf("NPE for ch_roi is: %g\n", NPEchroi);
 
