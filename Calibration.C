@@ -1,4 +1,5 @@
 #include <iostream>
+#include <string>
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
@@ -27,42 +28,48 @@
 #include "TVirtualFitter.h"
 
 
-void Calibration(int nbin=300, int nmin= -2000, int nmax=20000, double nmin2 = 0, double nmax2 =6)
+void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000, double nmin2 = 0, double nmax2 =16, int nmin3 = 0, int nmax3 = 16)
 {   
     //plotting ch_roi
-    int numrun = 5;
+    int numrun = 4;
     int run[numrun];
-    vector<float> histentry;
+    double recomean[numrun];
+    double mcmean[numrun];
     for (int lk = 1; lk < numrun+1;lk++)
     {
         run[lk] = lk;
     }
+
     TCanvas *c1[numrun];
     TCanvas *c2[numrun];
+    TCanvas *c3[numrun];
+    TCanvas *c4[numrun];
     for (int l = 1; l < numrun+1; l++)
     {
         printf("Analysing ch_roi with NPE%d\n", run[l]);
         TFile *f = new TFile(Form("outputNPE%i.root",run[l]), "read");
         TTree *data = (TTree*)f->Get("dstree");
-    
+        
+        //plotting ch-roi from branch
         c1[l] = new TCanvas(Form("c1%d",run[l]), "Finger Plot",200,10,600,400);
         TH1 *h1 = new TH1F("h1",Form("ch_roi_NPE%d",run[l]), nbin, nmin, nmax);
         data->Draw("ch_roi>>h1");
         double FirstBin = h1->FindFirstBinAbove(0,1,1,-1);
         double LastBin = h1->FindLastBinAbove(0,1,1,-1);
-        //nmin = h1->GetXaxis()->GetBinCenter(FirstBin);
-        //nmax = h1->GetXaxis()->GetBinCenter(LastBin);
-        //h1->GetXaxis()->SetRangeUser(nmin,nmax);
+        nmin = h1->GetXaxis()->GetBinCenter(FirstBin);
+        nmax = h1->GetXaxis()->GetBinCenter(LastBin);
+        h1->GetXaxis()->SetRangeUser(nmin,nmax);
         h1->Draw();
+        nmin = -2000;
+        nmax = 20000;
 
         //Peak finding ch_roi
-        TSpectrum *s1 = new TSpectrum(10);
+        TSpectrum *s1 = new TSpectrum(11);
         int nfound1 = s1->Search(h1,4,"",0.005);
         printf("Found %d candidate peaks to fit\n", nfound1);
         double *x1 = s1->GetPositionX();
         vector<double> x(x1, x1 + nfound1);
         sort(x.begin(), x.end());
-    
         //mean distance ch_roi
         float dmu = 0;
         for (int i = 0; i < nfound1-1; i++)
@@ -70,9 +77,8 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=20000, double nmin2 = 0
            dmu += x[i + 1] - x[i];
         }
         dmu = dmu/(nfound1-1);
-    
-        //Fitting single guas on ch_roi
 
+        //Fitting single guas on ch_roi
         TF1 *g[nfound1];
         for (int p=0;p<nfound1;p++) 
         {
@@ -129,18 +135,65 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=20000, double nmin2 = 0
         /////////////////////////////////////////////////
         //finding the average charge/PE
         double CpPE[nfound1];
+        double Cal = 0;
         for (int i = 1; i < nfound1; i++)
-        {   
+        {  
             CpPE[i] = x[i]/(i);
-            printf("%f\n",CpPE[i]);
+            Cal += CpPE[i];
         }
+        Cal = Cal/(nfound1-1);
+        printf("The Calibration for this run is %f ADU/PE\n",Cal); 
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+        //plotting ch_roi as a function of NPE;
+        
+        //c2[l] = new TCanvas(Form("c2%d",run[l]), "Ch_roi as a function of PE",200,10,600,400);
+        TH1 *h2 = new TH1F("h2",Form("ch_roi_NPE%d",run[l]), nbin3, nmin2, nmax2);
+        
+        TTreeReader myReader("dstree", f);
+        TTreeReaderValue<std::vector<float>> myVectorRV(myReader,"ch_roi");
+
+        unsigned int evtCounter = 0;
+        while (myReader.Next()){
+            //cout << "Event " << evtCounter++ << endl;
+            for (auto&& value : *myVectorRV){
+                h2->Fill(value/1400.0);
+            }   
+        }
+        recomean[l] = h2->GetMean();
+        cout << recomean[l] << endl;
+        //h2->Draw();
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        //Loading MCNPE
+        c3[l] = new TCanvas(Form("c3%d",run[l]), "MC NPE per event as a function of PE",200,10,600,400);
+        TH1 *h3 = new TH1F("h3",Form("MC_NPE%d",run[l]), nbin3, nmin3, nmax3);
+        data->Draw("mc_npe>>h3");
+        mcmean[l] = h3->GetMean();
+        cout << mcmean[l] << endl;
+        h3->SetFillColor(kGreen);
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        //overlaying histograms
+        THStack *hs = new THStack("hs","MC and reconstrcuted number of PE");
+        hs->Add(h3);
+        hs->Add(h2);
+        hs->Draw("nostack");
+        hs->SetTitle(Form("MC and reconstrcuted number of PE for %dNPE", run[l]));
+        hs->GetXaxis()->SetTitle("Number of Photoelectrons");
+        hs->GetYaxis()->SetTitle("Frequency");
+        TLegend *leg = new TLegend(0.7,0.7,0.9,0.9);
+        leg->AddEntry(h2,"Reconstruction NPE");
+        leg->AddEntry(h3,"MC NPE");
+        leg->Draw();
+
+
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // delete 3 (index 2)
+
         for (int k = 0; k < sizeof(CpPE)/sizeof(CpPE[0]); k++)
         {
             CpPE[k] = CpPE[k + 1]; // copy next element left
         }
         
-        c2[l] = new TCanvas(Form("c2%d",run[l]), "Calibration Curve",200,10,600,400);
+        c4[l] = new TCanvas(Form("c4%d",run[l]), "Calibration Curve",200,10,600,400);
         Int_t p = nfound1;
         Double_t xc[p], y[p];
         for (Int_t i=0; i<p; i++) 
@@ -148,117 +201,50 @@ void Calibration(int nbin=300, int nmin= -2000, int nmax=20000, double nmin2 = 0
             xc[i] = 1.0*(i+1);
             y[i] = 1.0*CpPE[i];
         }
-        TGraph *gr = new TGraph(p,xc,y);
-        gr->SetTitle(Form("Calibration Curve for %dNPE w/no secondary events",run[l]));
-        gr->GetXaxis()->SetTitle("Number of Photoelectrons");
-        gr->GetYaxis()->SetTitle("Charge/Photoelectron");
-        gr->Draw("A*");
+        TGraph *gr1 = new TGraph(p,xc,y);
+        gr1->SetTitle(Form("Calibration Curve for %dNPE w/no secondary events",run[l]));
+        gr1->GetXaxis()->SetTitle("Number of Photoelectrons");
+        gr1->GetYaxis()->SetTitle("Charge/Photoelectron");
+        gr1->Draw("A*");
         
+      /////////////////////////////////////////////////////////////////////////////
+      //OLD way to calculate number of PE  
         //CpPE = (CpPE/(nfound1-1))*1e-13;
         // printf("%g\n",CpPE);
 
-       dmuf = (dmuf/(nfound1-1))*1e-13;
-       printf("ch_roi 1PE corresponds to %g C\n", dmuf);
+        //dmuf = (dmuf/(nfound1-1))*1e-13;
+        //printf("ch_roi 1PE corresponds to %g C\n", dmuf);
 
         //Finding NPE for ch_roi
-        float TCharge = (h1->Integral((peakmean[0]+dmuf/2),LastBin))*1e-13;
-        double NPEchroi = TCharge/dmuf;
-        printf("NPE for ch_roi is: %g\n", NPEchroi);
+        //float TCharge = (h1->Integral((peakmean[0]+dmuf/2),LastBin))*1e-13;
+        //double NPEchroi = TCharge/dmuf;
+       //printf("NPE for ch_roi is: %g\n", NPEchroi);
+       ////////////////////////////////////////////////////////////////////////////
     }
 
+
+    //Reconstruction calibration as a function of NPE generated
+    TCanvas *c5;
+    c5 = new TCanvas("c5", "Calibration Curve",200,10,600,400);
+    Int_t j = numrun;
+        Double_t xj[j], yj[j];
+        for (Int_t i=1; i<j+1; i++) 
+        {
+            xj[i] = 1.0*(i);
+            yj[i] = 1.0*(recomean[i]/mcmean[i]);
+            cout << yj[i] << endl;
+        }
+        
+        TGraph *gr2 = new TGraph(j+1,xj,yj);
+        gr2->SetTitle("Reconstruction Calibration");
+        gr2->GetXaxis()->SetTitle("Number of Photoelectrons");
+        gr2->GetYaxis()->SetTitle("Reconstruction Calibration");
+        gr2->Draw("A*");
+
+    
+    
+   
+
+
+
 }
-//     printf("Analysing pk_p\n");
-//     //plotting pk_p
-//     TCanvas *c2;
-
-//         c2 = new TCanvas("c2", "Finger Plot",200,10,600,400);
-
-//         TH1 *h2 = new TH1F("h2","pk_p",nbin, nmin2, nmax2);
-//         data->Draw("pk_p>>h2");
-//         h2->Draw();
-
-//     //Peak finding pk_p
-//     TSpectrum *s2 = new TSpectrum(10);
-//     int nfound2 = s2->Search(h2,4,"",0.005);
-//     printf("Found %d candidate peaks to fit\n", nfound2);
-//     double *x2 = s2->GetPositionX();
-//     vector<double> X(x2, x2 + nfound2);
-//     sort(X.begin(), X.end());
-//     float dmu2 = 0;
-//     for (int ii = 0; ii < nfound2-1; ii++)
-//     {
-//         dmu2 += X[ii + 1] - X[ii];
-//     }
-
-//     //mean distance pk_p
-//     dmu2 = dmu2/(nfound2-1);
-
-//     //Fitting single guas on pk_p
-//     TF1 *g2[nfound2];
-//     for (int pp=0;pp<nfound2;pp++) 
-//     {
-//         g2[pp] = new TF1("gaus2","gaus",X[pp] -dmu2/2, X[pp] + dmu2/2);
-	
-//         g2[pp]->SetLineWidth(2);
-//         g2[pp]->SetLineColor(kRed);
-//         h2->Fit(g2[pp],"R+Q+0");
-//     }
-//     //Fitting sum of guas on pk_p
-//     string sgaus2 = "gaus(0) ";
-//       for (int ss = 1; ss < nfound2; ss++)
-//       {
-//             sgaus2 += Form("+ gaus(%d) ", 3*ss);
-//       } 
-      
-//       TF1 *sum2 = new TF1("gaussum2",sgaus2.c_str(),X[0] - dmu2/2, X[nfound2 - 1] + dmu2/2);
-//       sum2->SetNpx(1000);
-      
-//       for (int kk=0;kk<3*nfound2;kk++)
-//       {
-// 	        sum2->SetParameter(kk,g2[(kk-kk%3)/3]->GetParameter(kk%3));
-// 	        if(!(kk-1)%3) sum2->FixParameter(kk,g2[(kk-kk%3)/3]->GetParameter(kk%3));
-//             //look in the range +/- dmu/3
-// 	        if(!(kk-1)%3) sum2->SetParLimits(kk, sum2->GetParameter(kk) - dmu2/3,sum2->GetParameter(kk) + dmu2/3);
-//       }
-    
-//        // this refines the fit, fixes the other paramters and refines the x
-//        for (int kk=0;kk<3*nfound2;kk++)
-//       {
-// 	        sum2->SetParameter(kk,g2[(kk-kk%3)/3]->GetParameter(kk%3));
-// 	        if(!(kk-1)%3) sum2->ReleaseParameter(kk);
-//             //look in the range =/- dmu/3
-//             if(!(kk-1)%3) sum2->SetParLimits(kk, sum2->GetParameter(kk) - dmu2/3,sum2->GetParameter(kk) + dmu2/3);
-//       }
-      
-//        sum2->SetLineWidth(2);
-//        sum2->SetLineColor(kBlack);
-//        h2->Fit(sum2,"R+Q");
-
-
-    
-//     //extracting fit parameters and finding average distance pk_p
-//     vector<double>peakmean2;
-//     for (int l = 0; l< nfound2; l++)
-//     {
-//         peakmean2.push_back(sum2->GetParameter((3*l)+1));
-//     }
-//     sort(peakmean2.begin(), peakmean2.end());
-//     float dmuf2 = 0;
-//     for (int ll = 0; ll <nfound2 -1; ll++)
-//     {
-//         dmuf2 += peakmean2[ll + 1] - peakmean2[ll];
-//     }
-
-//     dmuf2 = (dmuf2/(nfound2-1));
-//     printf("pk_p 1PE corresponds to %g C \n", dmuf2);
-
-//     //Finding NPE pk_p
-//     double Tpkp = 0;
-//     for (int i = 0; i < nfound2 -1; i++)
-//     {
-//         Tpkp += peakmean2[i];
-//     }
-//     double NPEpkp = Tpkp/peakmean[1];
-    
-//     printf("NPE for pk_p is: %g\n", NPEpkp);
-// }
