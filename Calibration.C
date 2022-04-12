@@ -159,7 +159,7 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
             //cout << "Event " << evtCounter++ << endl;
             for (auto&& value : *myVectorRV)
             {
-                h2->Fill(value/1400.0);
+                h2->Fill(value/1400.0); //Eleason - change this?
             }   
         }
 
@@ -251,7 +251,7 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
 
     TCanvas *c6;
     c6 = new TCanvas("c6", "Calibration Curve", 200, 10, 600, 400);
-    TH2F *h = new TH2F("h","",nbin3,nmin3,nmax3,nbin3,nmin3,nmax3);
+    TH2F *h = new TH2F("h","",nbin3,nmin3,nmax3,100,nmin3,nmax3);
    
     //Open file containing tree
 
@@ -273,12 +273,13 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
             //cout << "Event " << evtCounter++ << endl;
             for (auto&& value : *myVectorRV)
             {
-                Double_t Px = myPx;
-                h->Fill(Px,value/1400.0);
+                Double_t Px = *myPx;
+                h->Fill(Px,value/1400.0); //Eleason - change this?
             }   
         }
-    h->Draw("COL");
-    
+    h->Draw("COLZ");
+    h->GetXaxis()->SetTitle("True NPE");
+    h->GetYaxis()->SetTitle("Reco NPE");
 }
     
 
