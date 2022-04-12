@@ -35,6 +35,8 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
     int run[numrun];
     double recomean[numrun];
     double mcmean[numrun];
+    double reco[10000];
+    double truth[10000];
     for (int lk = 1; lk < numrun+1;lk++)
     {
         run[lk] = lk;
@@ -155,10 +157,14 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
         unsigned int evtCounter = 0;
         while (myReader.Next()){
             //cout << "Event " << evtCounter++ << endl;
-            for (auto&& value : *myVectorRV){
+            for (auto&& value : *myVectorRV)
+            {
                 h2->Fill(value/1400.0);
             }   
         }
+
+
+
         recomean[l] = h2->GetMean();
         cout << recomean[l] << endl;
         //h2->Draw();
@@ -226,7 +232,7 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
     //Reconstruction calibration as a function of NPE generated
     TCanvas *c5;
     c5 = new TCanvas("c5", "Calibration Curve",200,10,600,400);
-    Int_t j = numrun;
+        Int_t j = numrun;
         Double_t xj[j], yj[j];
         for (Int_t i=1; i<j+1; i++) 
         {
@@ -241,10 +247,45 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
         gr2->GetYaxis()->SetTitle("Reconstruction Calibration");
         gr2->Draw("A*");
 
+
+
+    TCanvas *c6;
+    c6 = new TCanvas("c6", "Calibration Curve", 200, 10, 600, 400);
+    TH2F *h = new TH2F("h","",nbin3,nmin3,nmax3,nbin3,nmin3,nmax3);
+   
+    //Open file containing tree
+
+    TFile *f = new TFile("outputNPE5.root", "read");
+       
     
+   // Create a TTreeReader for the tree, for instance by passing the
+   // TTree's name and the TDirectory / TFile it is in.
+   TTreeReader myReader("dstree", f);
+
+    // The branch "px" contains floats; access them as myPx.
+   TTreeReaderValue<Int_t> myPx(myReader, "mc_npe");
+   // The branch "py" contains floats, too; access those as myPy.
+   
+   TTreeReaderValue<std::vector<float>> myVectorRV(myReader,"ch_roi");
+   // Loop over all entries of the TTree or TChain.
+   unsigned int evtCounter = 0;
+        while (myReader.Next()){
+            //cout << "Event " << evtCounter++ << endl;
+            for (auto&& value : *myVectorRV)
+            {
+                Double_t Px = myPx;
+                h->Fill(Px,value/1400.0);
+            }   
+        }
+    h->Draw("COL");
     
+}
+    
+
+
+
+  
    
 
 
 
-}
