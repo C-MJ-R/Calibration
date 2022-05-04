@@ -46,7 +46,7 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
     TCanvas *c4[numrun];
     for (int l = 1; l < numrun+1; l++)
     {
-        printf("Analysing ch_roi with NPE%d\n", run[l]);
+        printf("Analysing ch_roi with a mean NPE distribution of %d\n", run[l]);
         TFile *f = new TFile(Form("outputNPE%i.root",run[l]), "read");
         TTree *data = (TTree*)f->Get("dstree");
         
@@ -204,8 +204,8 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
         
         TGraph *gr2 = new TGraph(j+1,xj,yj);
         gr2->SetTitle("Reconstruction Calibration");
-        gr2->GetXaxis()->SetTitle("Number of Photoelectrons");
-        gr2->GetYaxis()->SetTitle("Reconstruction Calibration");
+        gr2->GetXaxis()->SetTitle("Simulation NPE distribution mean");
+        gr2->GetYaxis()->SetTitle("Reconstructed NPE/Truth NPE");
         gr2->Draw("A*");
 
 
