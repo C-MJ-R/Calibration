@@ -31,12 +31,10 @@
 void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000, double nmin2 = 0, double nmax2 =16, int nmin3 = 0, int nmax3 = 16)
 {   
     //plotting ch_roi
-    int numrun = 4;
+    int numrun = 5;
     int run[numrun];
-    double recomean[numrun];
-    double mcmean[numrun];
-    double reco[10000];
-    double truth[10000];
+    double ratio[numrun];
+    double calibration;
     for (int lk = 1; lk < numrun+1;lk++)
     {
         run[lk] = lk;
@@ -53,6 +51,7 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
         TTree *data = (TTree*)f->Get("dstree");
         
         //plotting ch-roi from branch
+
         c1[l] = new TCanvas(Form("c1%d",run[l]), "Finger Plot",200,10,600,400);
         TH1 *h1 = new TH1F("h1",Form("ch_roi_NPE%d",run[l]), nbin, nmin, nmax);
         data->Draw("ch_roi>>h1");
@@ -129,56 +128,55 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
             peakmean.push_back(sum->GetParameter((3*w)+1));
         }
         sort(peakmean.begin(), peakmean.end());
+        peakmean.erase (peakmean.begin()+0);
+        //for (int k = 0; k <nfound1 -1; k++)
+        //{
+        //    cout << peakmean[k] << endl;
+        //}
         float dmuf = 0;
-        for (int ww = 0; ww <nfound1 -1; ww++)
+        //distance between peaks using fit paramters and exluding the pedestal
+        for (int ww = 0; ww <nfound1-1; ww++)
         {
             dmuf += peakmean[ww + 1] - peakmean[ww];
         }
-        /////////////////////////////////////////////////
-        //finding the average charge/PE
-        double CpPE[nfound1];
-        double Cal = 0;
-        for (int i = 1; i < nfound1; i++)
-        {  
-            CpPE[i] = x[i]/(i);
-            Cal += CpPE[i];
-        }
-        Cal = Cal/(nfound1-1);
+        double Cal;
+        Cal = dmuf/(nfound1);
         printf("The Calibration for this run is %f ADU/PE\n",Cal); 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
-        //plotting ch_roi as a function of NPE;
-        
+        //plotting ch_roi as a function of NPE and storing NPE from reconstruction and truth NPE;
         //c2[l] = new TCanvas(Form("c2%d",run[l]), "Ch_roi as a function of PE",200,10,600,400);
         TH1 *h2 = new TH1F("h2",Form("ch_roi_NPE%d",run[l]), nbin3, nmin2, nmax2);
-        
+        double Reco = 0;
+        Double_t NPE;
         TTreeReader myReader("dstree", f);
         TTreeReaderValue<std::vector<float>> myVectorRV(myReader,"ch_roi");
+         TTreeReaderValue<Int_t> NPETruth(myReader, "mc_npe");
 
         unsigned int evtCounter = 0;
         while (myReader.Next()){
             //cout << "Event " << evtCounter++ << endl;
             for (auto&& value : *myVectorRV)
             {
-                h2->Fill(value/1400.0);
+                h2->Fill(value/Cal);
+                Reco += value/Cal;
+                NPE += *NPETruth;
             }   
         }
+      
+        int RecoNPE = (int)round(Reco);
 
 
+        ratio[l] = RecoNPE/NPE;
 
-        recomean[l] = h2->GetMean();
-        cout << recomean[l] << endl;
-        //h2->Draw();
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //Loading MCNPE
         c3[l] = new TCanvas(Form("c3%d",run[l]), "MC NPE per event as a function of PE",200,10,600,400);
         TH1 *h3 = new TH1F("h3",Form("MC_NPE%d",run[l]), nbin3, nmin3, nmax3);
         data->Draw("mc_npe>>h3");
-        mcmean[l] = h3->GetMean();
-        cout << mcmean[l] << endl;
         h3->SetFillColor(kGreen);
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         //overlaying histograms
-        THStack *hs = new THStack("hs","MC and reconstrcuted number of PE");
+        THStack *hs = new THStack("hs","MC and reconstructed number of PE");
         hs->Add(h3);
         hs->Add(h2);
         hs->Draw("nostack");
@@ -189,43 +187,6 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
         leg->AddEntry(h2,"Reconstruction NPE");
         leg->AddEntry(h3,"MC NPE");
         leg->Draw();
-
-
-        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // delete 3 (index 2)
-
-        for (int k = 0; k < sizeof(CpPE)/sizeof(CpPE[0]); k++)
-        {
-            CpPE[k] = CpPE[k + 1]; // copy next element left
-        }
-        
-        c4[l] = new TCanvas(Form("c4%d",run[l]), "Calibration Curve",200,10,600,400);
-        Int_t p = nfound1;
-        Double_t xc[p], y[p];
-        for (Int_t i=0; i<p; i++) 
-        {
-            xc[i] = 1.0*(i+1);
-            y[i] = 1.0*CpPE[i];
-        }
-        TGraph *gr1 = new TGraph(p,xc,y);
-        gr1->SetTitle(Form("Calibration Curve for %dNPE w/no secondary events",run[l]));
-        gr1->GetXaxis()->SetTitle("Number of Photoelectrons");
-        gr1->GetYaxis()->SetTitle("Charge/Photoelectron");
-        gr1->Draw("A*");
-        
-      /////////////////////////////////////////////////////////////////////////////
-      //OLD way to calculate number of PE  
-        //CpPE = (CpPE/(nfound1-1))*1e-13;
-        // printf("%g\n",CpPE);
-
-        //dmuf = (dmuf/(nfound1-1))*1e-13;
-        //printf("ch_roi 1PE corresponds to %g C\n", dmuf);
-
-        //Finding NPE for ch_roi
-        //float TCharge = (h1->Integral((peakmean[0]+dmuf/2),LastBin))*1e-13;
-        //double NPEchroi = TCharge/dmuf;
-       //printf("NPE for ch_roi is: %g\n", NPEchroi);
-       ////////////////////////////////////////////////////////////////////////////
     }
 
 
@@ -237,8 +198,8 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
         for (Int_t i=1; i<j+1; i++) 
         {
             xj[i] = 1.0*(i);
-            yj[i] = 1.0*(recomean[i]/mcmean[i]);
-            cout << yj[i] << endl;
+            yj[i] = 1.0*ratio[i];
+            //cout << yj[i] << endl;
         }
         
         TGraph *gr2 = new TGraph(j+1,xj,yj);
@@ -273,11 +234,40 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
             //cout << "Event " << evtCounter++ << endl;
             for (auto&& value : *myVectorRV)
             {
-                Double_t Px = myPx;
-                h->Fill(Px,value/1400.0);
+                Double_t Px = *myPx;
+                h->Fill(Px,value/1137.463989);
             }   
         }
-    h->Draw("COL");
+    
+    double row_total = 0;
+    double rows_total[16];
+    for (int i = 1; i < 17; i++)
+    {
+        row_total = 0;
+        for (int j = 1; j < 17; j ++)
+        {
+            row_total += h->GetBinContent(h->GetBin(j,i));
+            rows_total[i-1] = row_total;
+        }
+        //cout << rows_total[i-1] << endl;
+        
+    }
+    for (int i = 1; i < 17; i++)
+    {
+        for (int j = 1; j < 17; j ++)
+        {
+            h->SetBinContent(h->GetBin(j,i), (h->GetBinContent(h->GetBin(j,i)))/rows_total[i-1]);
+        }
+    }
+    gStyle->SetPaintTextFormat("4.2f");
+    h->SetMarkerSize(1.8);
+    h->GetXaxis()->SetTitle("Reconstrcuted NPE");
+    h->GetYaxis()->SetTitle("Truth NPE");
+    h->Draw("COLZ");
+    h->Draw("textsame");
+
+
+    
     
 }
     
