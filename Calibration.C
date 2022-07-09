@@ -261,7 +261,7 @@ void Calibration(int nbin=300, int nbin3 = 16 , int nmin= -2000, int nmax=20000,
     }
     gStyle->SetPaintTextFormat("4.2f");
     h->SetMarkerSize(1.8);
-    h->GetXaxis()->SetTitle("Reconstrcuted NPE");
+    h->GetXaxis()->SetTitle("reconstructed NPE");
     h->GetYaxis()->SetTitle("Truth NPE");
     h->Draw("COLZ");
     h->Draw("textsame");
